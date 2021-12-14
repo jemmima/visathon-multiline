@@ -1,4 +1,5 @@
 import * as d3 from "d3";
+import { AxisScale } from "d3";
 import totalEmissions from "../tot_emiss_kg.json";
 import { CSS_COLOR_NAMES } from "./colors";
 
@@ -15,7 +16,7 @@ interface Options {
   height?: number; // = 400, // outer height, in pixels
   xType?: typeof d3.scaleUtc; // = d3.scaleUtc, // the x-scale type
   xRange?: [number, number]; // = [marginLeft, width - marginRight], // [left, right]
-  yType?: typeof d3.scaleLinear; // = d3.scaleLinear, // the y-scale type
+  yType?: typeof d3.scaleLinear; //
   yRange?: [number, number]; // = [height - marginBottom, marginTop], // [bottom, top]
   yLabel: string; //, // a label for the y-axis
   color?: string; // = "currentColor", // stroke color of line
@@ -39,9 +40,9 @@ function LineChart(
     getZValues,
     curve = d3.curveLinear, // method of interpolation between points
     marginTop = 20, // top margin, in pixels
-    marginRight = 30, // right margin, in pixels
+    marginRight = 60, // right margin, in pixels
     marginBottom = 30, // bottom margin, in pixels
-    marginLeft = 40, // left margin, in pixels
+    marginLeft = 60, // left margin, in pixels
     width = 640, // outer width, in pixels
     height = 400, // outer height, in pixels
     xType = d3.scaleUtc, // the x-scale type
@@ -70,6 +71,10 @@ function LineChart(
   // Construct scales and axes.
   const xScale = xType(d3.extent(xAxisValues) as [number, number], xRange);
   const yScale = yType([0, d3.max(yAxisValues)!], yRange);
+  console.log("yScale", d3.max(yAxisValues));
+  const logYScale = yType()
+    .domain([0, d3.max(yAxisValues)!])
+    .range(yRange);
   const renderXAxis: d3.Axis<d3.NumberValue> = d3
     .axisBottom(xScale)
     .ticks(width / 80)
@@ -80,16 +85,6 @@ function LineChart(
 
   const series = Array.from(new Set(zAxisValues));
   const range = (length: number) => new Array(length).fill([]);
-
-  const seriesAxesValues = sizeOfXAxis.map((value, valueIndex) => {
-    const result: [number, number][][] = range(series.length);
-    series.map((foodType, seriesIndex) => {
-      if (zAxisValues[valueIndex] == foodType) {
-        result[seriesIndex].push(value);
-      }
-    });
-    return result;
-  });
 
   const seriesYAxes: number[][] = series.map((foodType) => {
     let result: number[] = [];
@@ -104,7 +99,6 @@ function LineChart(
 
   // Construct a line generator.
   const lines: d3.Line<[number, number]>[] = series.map((_foodType, index) => {
-    const yAxis: number[] = seriesYAxes[index];
     return d3
       .line()
       .defined((_d: [number, number], i: number) => valuesExist[i])
@@ -160,6 +154,22 @@ function LineChart(
       .attr("stroke-opacity", strokeOpacity)
       .attr("d", line(sizeOfXAxis));
   });
+  console.log(
+    seriesYAxes,
+    seriesYAxes.map((series) => series[series.length - 1])
+  );
+  svg
+    .selectAll("text.label")
+    .data(seriesYAxes.map((series) => series[series.length - 1]))
+    .join("text")
+    .attr("class", "label")
+    .attr("x", width - marginRight + 5)
+    .attr("y", (d) => yScale(d))
+    .attr("dy", "0.35em")
+    .style("fill", (d) => "black")
+    .style("font-family", "sans-serif")
+    .style("font-size", 12)
+    .text((d, i) => series[i]);
 
   return svg.node();
 }
@@ -173,7 +183,7 @@ keysOf(totalEmissions).map((foodType) => {
   keysOf(totalEmissions[foodType]).map((year) => {
     data.push({
       year: year,
-      value: Number(totalEmissions[foodType][year]) / 1000000,
+      value: Math.round(Number(totalEmissions[foodType][year]) / 1000000000000),
       food: foodType,
     });
   });
@@ -185,7 +195,7 @@ const chart = LineChart(data, {
   getXValues: (d) => Number(d.year),
   getYValues: (d) => d.value,
   getZValues: (d) => d.food,
-  yLabel: "temperature",
+  yLabel: "Btonnes CO2",
   width: document.querySelector("body")?.offsetWidth,
   height: 500,
   color: "steelblue",
