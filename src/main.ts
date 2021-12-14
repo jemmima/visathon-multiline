@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import totalEmissions from "../tot_emiss_kg.json";
+import { CSS_COLOR_NAMES } from "./colors";
 
 interface Options {
   getXValues: (data: TimeSeriesDatum) => number; //,
@@ -90,11 +91,11 @@ function LineChart(
     return result;
   });
 
-  const seriesYAxes: number[][] = yAxisValues.map((value, valueIndex) => {
-    const result: number[] = range(series.length);
-    series.map((foodType, seriesIndex) => {
+  const seriesYAxes: number[][] = series.map((foodType) => {
+    let result: number[] = [];
+    yAxisValues.map((value, valueIndex) => {
       if (zAxisValues[valueIndex] == foodType) {
-        result[seriesIndex] = value;
+        result.push(value);
       }
     });
     return result;
@@ -113,14 +114,6 @@ function LineChart(
       })
       .y((_d: [number, number], i: number) => yScale(seriesYAxes[index][i]));
   });
-  const line: d3.Line<[number, number]> = d3
-    .line()
-    .defined((_d: [number, number], i: number) => valuesExist[i])
-    .curve(curve)
-    .x((_d: [number, number], i: number) => {
-      return xScale(xAxisValues[i]);
-    })
-    .y((_d: [number, number], i: number) => yScale(yAxisValues[i]));
 
   const svg = d3
     .create("svg")
@@ -156,26 +149,17 @@ function LineChart(
         .text(yLabel)
     );
 
-  /* lines.map((line) => {
+  lines.map((line, index) => {
     svg
       .append("path")
       .attr("fill", "none")
-      .attr("stroke", color)
+      .attr("stroke", CSS_COLOR_NAMES[index])
       .attr("stroke-width", strokeWidth)
       .attr("stroke-linecap", strokeLinecap)
       .attr("stroke-linejoin", strokeLinejoin)
       .attr("stroke-opacity", strokeOpacity)
       .attr("d", line(sizeOfXAxis));
-  }); */
-  svg
-    .append("path")
-    .attr("fill", "none")
-    .attr("stroke", color)
-    .attr("stroke-width", strokeWidth)
-    .attr("stroke-linecap", strokeLinecap)
-    .attr("stroke-linejoin", strokeLinejoin)
-    .attr("stroke-opacity", strokeOpacity)
-    .attr("d", line(sizeOfXAxis));
+  });
 
   return svg.node();
 }
