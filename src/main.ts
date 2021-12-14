@@ -1,9 +1,10 @@
 import * as d3 from "d3";
-import timeseries from "../timeseries.json";
+import totalEmissions from "../tot_emiss_kg.json";
 
 interface Options {
   getXValues: (data: TimeSeriesDatum) => number; //,
   getYValues: (data: TimeSeriesDatum) => number; //,
+  getZValues: (data: TimeSeriesDatum) => string;
   curve?: d3.CurveFactory; // = d3.curveLinear, // method of interpolation between points
   marginTop?: number; // = 20, // top margin, in pixels
   marginRight?: number; // = 30, // right margin, in pixels
@@ -23,13 +24,18 @@ interface Options {
   strokeOpacity?: number; // = 1, // stroke opacity of line
 }
 
-type TimeSeriesDatum = { time: number; value: number };
+type TimeSeriesDatum = {
+  year: string;
+  value: number;
+  food: string;
+};
 
 function LineChart(
   data: TimeSeriesDatum[],
   {
     getXValues,
     getYValues,
+    getZValues,
     curve = d3.curveLinear, // method of interpolation between points
     marginTop = 20, // top margin, in pixels
     marginRight = 30, // right margin, in pixels
@@ -52,11 +58,12 @@ function LineChart(
   // Compute values.
   const xAxisValues: number[] = d3.map(data, getXValues);
   const yAxisValues: number[] = d3.map(data, getYValues);
+  const zAxisValues: string[] = d3.map(data, getZValues);
   const sizeOfXAxis: [number, number][] = d3
     .range(xAxisValues.length)
     .map((position) => [0, position]);
   const valueExists = (d: TimeSeriesDatum, i: number): boolean =>
-    Boolean(d.time) && !isNaN(d.value);
+    Boolean(d.year) && !isNaN(d.value);
   const valuesExist: boolean[] = d3.map(data, valueExists);
 
   // Construct scales and axes.
@@ -70,8 +77,43 @@ function LineChart(
     .axisLeft(yScale)
     .ticks(height / 40);
 
+  const series = Array.from(new Set(zAxisValues));
+  const range = (length: number) => new Array(length).fill([]);
+
+  const seriesAxesValues = sizeOfXAxis.map((value, valueIndex) => {
+    const result: [number, number][][] = range(series.length);
+    series.map((foodType, seriesIndex) => {
+      if (zAxisValues[valueIndex] == foodType) {
+        result[seriesIndex].push(value);
+      }
+    });
+    return result;
+  });
+
+  const seriesYAxes: number[][] = yAxisValues.map((value, valueIndex) => {
+    const result: number[] = range(series.length);
+    series.map((foodType, seriesIndex) => {
+      if (zAxisValues[valueIndex] == foodType) {
+        result[seriesIndex] = value;
+      }
+    });
+    return result;
+  });
+  console.log(seriesYAxes);
+
   // Construct a line generator.
-  const line = d3
+  const lines: d3.Line<[number, number]>[] = series.map((_foodType, index) => {
+    const yAxis: number[] = seriesYAxes[index];
+    return d3
+      .line()
+      .defined((_d: [number, number], i: number) => valuesExist[i])
+      .curve(curve)
+      .x((_d: [number, number], i: number) => {
+        return xScale(xAxisValues[i]);
+      })
+      .y((_d: [number, number], i: number) => yScale(seriesYAxes[index][i]));
+  });
+  const line: d3.Line<[number, number]> = d3
     .line()
     .defined((_d: [number, number], i: number) => valuesExist[i])
     .curve(curve)
@@ -114,6 +156,17 @@ function LineChart(
         .text(yLabel)
     );
 
+  /* lines.map((line) => {
+    svg
+      .append("path")
+      .attr("fill", "none")
+      .attr("stroke", color)
+      .attr("stroke-width", strokeWidth)
+      .attr("stroke-linecap", strokeLinecap)
+      .attr("stroke-linejoin", strokeLinejoin)
+      .attr("stroke-opacity", strokeOpacity)
+      .attr("d", line(sizeOfXAxis));
+  }); */
   svg
     .append("path")
     .attr("fill", "none")
@@ -127,20 +180,32 @@ function LineChart(
   return svg.node();
 }
 
-const chart = LineChart(
-  timeseries.map((reading) => ({
-    time: Date.parse(reading.valuedatetime),
-    value: reading.datavalue,
-  })),
-  {
-    getXValues: (d) => d.time,
-    getYValues: (d) => d.value,
-    yLabel: "temperature",
-    width: document.querySelector("body")?.offsetWidth,
-    height: 500,
-    color: "steelblue",
-  }
-);
+let data: TimeSeriesDatum[] = [];
+function keysOf<T>(object: T) {
+  return Object.keys(object) as (keyof T)[];
+}
+
+keysOf(totalEmissions).map((foodType) => {
+  keysOf(totalEmissions[foodType]).map((year) => {
+    data.push({
+      year: year,
+      value: Number(totalEmissions[foodType][year]) / 1000000,
+      food: foodType,
+    });
+  });
+});
+
+console.log(data);
+
+const chart = LineChart(data, {
+  getXValues: (d) => Number(d.year),
+  getYValues: (d) => d.value,
+  getZValues: (d) => d.food,
+  yLabel: "temperature",
+  width: document.querySelector("body")?.offsetWidth,
+  height: 500,
+  color: "steelblue",
+});
 
 if (chart) {
   document.getElementById("root")?.append(chart);
